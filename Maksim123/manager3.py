@@ -1,0 +1,96 @@
+import tkinter as tk
+from tkinter import ttk
+import os
+from pathlib import Path
+
+class FileExplorer(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("File Explorer")
+        self.geometry("800x600")
+        
+        # Верхняя рамка с выбором текущего пути
+        top_frame = ttk.Frame(self)
+        top_frame.pack(fill="x", pady=(10, 0))
+        
+        self.location_label = ttk.Label(top_frame, text="Current Location:")
+        self.location_label.pack(side="left")
+        
+        self.location_entry = ttk.Entry(top_frame, width=50)
+        self.location_entry.pack(side="left", fill="x", expand=True)
+        self.location_entry.bind("<Return>", lambda event: self.on_location_change())
+        
+        # Основное окно делится на левую и правую части
+        left_frame = ttk.Frame(self)
+        right_frame = ttk.Frame(self)
+        left_frame.pack(side="left", fill="both", expand=True)
+        right_frame.pack(side="right", fill="both", expand=True)
+        
+        # Листинг директорий слева
+        self.tree_view = ttk.Treeview(left_frame)
+        self.tree_view.pack(fill="both", expand=True)
+        self.tree_view.heading('#0', text='Directory Structure')
+        self.populate_tree('/')  # Начнем с корня системы
+        
+        # Информация о файле справа
+        info_frame = ttk.Frame(right_frame)
+        info_frame.pack(fill="both", expand=True)
+        
+        self.info_text = tk.Text(info_frame, wrap="word")
+        self.info_text.pack(fill="both", expand=True)
+        
+        # Привязываем событие выделения элемента
+        self.tree_view.bind("<<TreeviewSelect>>", self.on_select)
+    
+    def on_location_change(self):
+        """Изменение местоположения вручную"""
+        location = self.location_entry.get()
+        if os.path.exists(location):
+            self.populate_tree(location)
+        else:
+            self.location_entry.delete(0, tk.END)
+            self.location_entry.insert(0, "Invalid path")
+    
+    def populate_tree(self, path):
+        """Заполнение TreeView элементами"""
+        self.tree_view.delete(*self.tree_view.get_children())  # Очистка предыдущего состояния
+        parent_node = self.tree_view.insert("", "end", text=Path(path).anchor)
+        self.recursively_add_nodes(parent_node, path)
+    
+    def recursively_add_nodes(self, parent, path):
+        """Рекурсивное заполнение узлов"""
+        try:
+            entries = os.scandir(path)
+            for entry in entries:
+                if entry.is_dir():
+                    node = self.tree_view.insert(parent, "end", text=entry.name)
+                    self.recursively_add_nodes(node, entry.path)
+                else:
+                    self.tree_view.insert(parent, "end", text=entry.name)
+        except PermissionError:
+            pass
+    
+    def on_select(self, event):
+        """Обработка события выбора узла"""
+        selection = self.tree_view.selection()
+        if selection:
+            item = self.tree_view.item(selection[0])
+            path = os.path.join(self.location_entry.get(), item["text"])
+            self.display_file_info(path)
+    
+    def display_file_info(self, path):
+        """Отображает информацию о файле"""
+        if os.path.exists(path):
+            stats = os.stat(path)
+            info = f"Name: {os.path.basename(path)}\n"
+            info += f"Size: {stats.st_size} bytes\n"
+            info += f"Last Modified: {datetime.datetime.fromtimestamp(stats.st_mtime)}"
+            self.info_text.delete("1.0", tk.END)
+            self.info_text.insert(tk.END, info)
+        else:
+            self.info_text.delete("1.0", tk.END)
+            self.info_text.insert(tk.END, "No information available.")
+
+if __name__ == "__main__":
+    explorer = FileExplorer()
+    explorer.mainloop()
